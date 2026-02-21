@@ -1,29 +1,31 @@
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import sqlite3
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from flask_bcrypt import Bcrypt
-from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.secret_key = "d93kL!2kL0x9$8sZpQ7"
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB limit
+app.secret_key = "supersecretkey"
 
-bcrypt = Bcrypt(app)
+UPLOAD_FOLDER = "uploads"
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
-UPLOAD_FOLDER = "uploads"
-ALLOWED_EXTENSIONS = {"txt", "pdf", "png", "jpg", "jpeg", "zip"}
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+DATABASE = "users.db"
 
 # ---------------- DATABASE ---------------- #
 
+def get_db():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
 def init_db():
-    conn = sqlite3.connect("users.db")
+    conn = get_db()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,9 +33,12 @@ def init_db():
             password TEXT
         )
     """)
+    conn.commit()
     conn.close()
 
 init_db()
+
+# ---------------- USER CLASS ---------------- #
 
 class User(UserMixin):
     def __init__(self, id, username):
@@ -42,17 +47,12 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = sqlite3.connect("users.db")
-    cur = conn.cursor()
-    cur.execute("SELECT id, username FROM users WHERE id=?", (user_id,))
-    user = cur.fetchone()
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     conn.close()
     if user:
-        return User(user[0], user[1])
+        return User(user["id"], user["username"])
     return None
-
-def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # ---------------- ROUTES ---------------- #
 
@@ -64,22 +64,18 @@ def home():
 def register():
     if request.method == "POST":
         username = request.form["username"]
-        password = bcrypt.generate_password_hash(request.form["password"]).decode("utf-8")
+        password = generate_password_hash(request.form["password"])
 
+        conn = get_db()
         try:
-            conn = sqlite3.connect("users.db")
             conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
             conn.commit()
-            conn.close()
-
-            os.makedirs(os.path.join(UPLOAD_FOLDER, username), exist_ok=True)
-
-            flash("Account created! Please login.")
+            flash("Registration successful")
             return redirect(url_for("login"))
-
         except:
-            flash("Username already exists!")
-            return redirect(url_for("register"))
+            flash("Username already exists")
+        finally:
+            conn.close()
 
     return render_template("register.html")
 
@@ -89,54 +85,40 @@ def login():
         username = request.form["username"]
         password = request.form["password"]
 
-        conn = sqlite3.connect("users.db")
-        cur = conn.cursor()
-        cur.execute("SELECT id, username, password FROM users WHERE username=?", (username,))
-        user = cur.fetchone()
+        conn = get_db()
+        user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         conn.close()
 
-        if user and bcrypt.check_password_hash(user[2], password):
-            login_user(User(user[0], user[1]))
+        if user and check_password_hash(user["password"], password):
+            login_user(User(user["id"], user["username"]))
             return redirect(url_for("dashboard"))
         else:
-            flash("Invalid credentials!")
+            flash("Invalid credentials")
 
     return render_template("login.html")
 
-@app.route("/dashboard")
+@app.route("/dashboard", methods=["GET", "POST"])
 @login_required
 def dashboard():
-    user_folder = os.path.join(UPLOAD_FOLDER, current_user.username)
+    user_folder = os.path.join(app.config["UPLOAD_FOLDER"], current_user.username)
+    os.makedirs(user_folder, exist_ok=True)
+
+    if request.method == "POST":
+        file = request.files["file"]
+        if file:
+            file.save(os.path.join(user_folder, file.filename))
+
     files = os.listdir(user_folder)
     return render_template("dashboard.html", files=files)
-
-@app.route("/upload", methods=["POST"])
-@login_required
-def upload():
-    file = request.files["file"]
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        user_folder = os.path.join(UPLOAD_FOLDER, current_user.username)
-        file.save(os.path.join(user_folder, filename))
-        flash("File uploaded successfully!")
-    else:
-        flash("Invalid file type!")
-
-    return redirect(url_for("dashboard"))
 
 @app.route("/delete/<filename>")
 @login_required
 def delete_file(filename):
-    user_folder = os.path.join(UPLOAD_FOLDER, current_user.username)
-    os.remove(os.path.join(user_folder, filename))
-    flash("File deleted!")
+    user_folder = os.path.join(app.config["UPLOAD_FOLDER"], current_user.username)
+    file_path = os.path.join(user_folder, filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
     return redirect(url_for("dashboard"))
-
-@app.route("/download/<filename>")
-@login_required
-def download_file(filename):
-    user_folder = os.path.join(UPLOAD_FOLDER, current_user.username)
-    return send_from_directory(user_folder, filename, as_attachment=True)
 
 @app.route("/logout")
 @login_required
@@ -145,4 +127,4 @@ def logout():
     return redirect(url_for("login"))
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True)
