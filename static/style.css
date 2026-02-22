@@ -1,0 +1,96 @@
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    display: flex;
+    background: #f1f5f9;
+}
+
+.center {
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.card {
+    background: white;
+    padding: 30px;
+    width: 300px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+}
+
+button {
+    width: 100%;
+    padding: 10px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #1e40af;
+}
+
+.sidebar {
+    width: 250px;
+    background: #111827;
+    color: white;
+    padding: 20px;
+    height: 100vh;
+}
+
+.box {
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.red { background: #ef4444; }
+.green { background: #10b981; }
+
+.logout {
+    color: white;
+    text-decoration: none;
+}
+
+.main {
+    flex: 1;
+    padding: 40px;
+}
+
+.upload {
+    margin-bottom: 30px;
+}
+
+.files {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.file-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.btn {
+    padding: 5px 10px;
+    text-decoration: none;
+    background: #2563eb;
+    color: white;
+    border-radius: 5px;
+}
+
+.delete {
+    background: #ef4444;
+}

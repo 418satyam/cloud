@@ -2,39 +2,45 @@
 <html>
 <head>
     <title>Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body class="bg-light">
+<body>
 
-<div class="container mt-4">
-    <h3>Welcome {{ current_user.username }}</h3>
-    <a href="/logout" class="btn btn-danger btn-sm float-end">Logout</a>
+<div class="sidebar">
+    <h2>{{ username }}</h2>
 
-    <hr>
+    <div class="box red">
+        <h3>{{ used }} MB</h3>
+        <p>Used</p>
+    </div>
 
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <div class="alert alert-info">{{ messages[0] }}</div>
-        {% endif %}
-    {% endwith %}
+    <div class="box green">
+        <h3>{{ remaining }} MB</h3>
+        <p>Remaining</p>
+    </div>
 
-    <form action="/upload" method="post" enctype="multipart/form-data" class="mb-3">
-        <input class="form-control mb-2" type="file" name="file" required>
-        <button class="btn btn-primary">Upload</button>
+    <a href="/logout" class="logout">Logout</a>
+</div>
+
+<div class="main">
+    <h1>Personal Cloud</h1>
+
+    <form method="POST" enctype="multipart/form-data" class="upload">
+        <input type="file" name="file" required>
+        <button type="submit">Upload</button>
     </form>
 
-    <h5>Your Files:</h5>
-    <ul class="list-group">
+    <div class="files">
         {% for file in files %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            {{ file }}
+        <div class="file-row">
+            <span>{{ file }}</span>
             <div>
-                <a href="/download/{{ file }}" class="btn btn-sm btn-success">Download</a>
-                <a href="/delete/{{ file }}" class="btn btn-sm btn-danger">Delete</a>
+                <a href="/download/{{ file }}" class="btn">Download</a>
+                <a href="/delete/{{ file }}" class="btn delete">Delete</a>
             </div>
-        </li>
+        </div>
         {% endfor %}
-    </ul>
+    </div>
 </div>
 
 </body>
