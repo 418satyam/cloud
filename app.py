@@ -1,20 +1,24 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, abort
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 import os
 import sqlite3
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
+app.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-DATABASE = os.path.join(BASE_DIR, "users.db")
+# IMPORTANT: Use /tmp for Render
+UPLOAD_FOLDER = "/tmp/uploads"
+DATABASE = "/tmp/users.db"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-STORAGE_LIMIT_MB = 100  # Per user limit
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB max upload
+
+STORAGE_LIMIT_MB = 100
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "pdf", "txt", "docx"}
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -60,6 +64,12 @@ def load_user(user_id):
     return None
 
 
+# ---------------- HELPERS ---------------- #
+
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
 # ---------------- ROUTES ---------------- #
 
 @app.route("/")
@@ -77,9 +87,8 @@ def register():
         try:
             conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
             conn.commit()
-            flash("Registration successful")
             return redirect(url_for("login"))
-        except:
+        except sqlite3.IntegrityError:
             flash("Username already exists")
         finally:
             conn.close()
@@ -113,24 +122,33 @@ def dashboard():
     os.makedirs(user_folder, exist_ok=True)
 
     if request.method == "POST":
-        file = request.files["file"]
-        if file:
-            file_path = os.path.join(user_folder, file.filename)
+        file = request.files.get("file")
 
-            # Check size before saving
-            file.seek(0, os.SEEK_END)
-            file_size = file.tell() / (1024 * 1024)
-            file.seek(0)
+        if not file or file.filename == "":
+            flash("No file selected")
+            return redirect(url_for("dashboard"))
 
-            current_size = sum(
-                os.path.getsize(os.path.join(user_folder, f))
-                for f in os.listdir(user_folder)
-            ) / (1024 * 1024)
+        if not allowed_file(file.filename):
+            flash("File type not allowed")
+            return redirect(url_for("dashboard"))
 
-            if current_size + file_size > STORAGE_LIMIT_MB:
-                flash("Storage limit exceeded!")
-            else:
-                file.save(file_path)
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(user_folder, filename)
+
+        # Check storage size
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell() / (1024 * 1024)
+        file.seek(0)
+
+        current_size = sum(
+            os.path.getsize(os.path.join(user_folder, f))
+            for f in os.listdir(user_folder)
+        ) / (1024 * 1024)
+
+        if current_size + file_size > STORAGE_LIMIT_MB:
+            flash("Storage limit exceeded")
+        else:
+            file.save(file_path)
 
     files = os.listdir(user_folder)
 
@@ -154,13 +172,20 @@ def dashboard():
 @app.route("/download/<filename>")
 @login_required
 def download_file(filename):
+    filename = secure_filename(filename)
     user_folder = os.path.join(app.config["UPLOAD_FOLDER"], current_user.username)
+    file_path = os.path.join(user_folder, filename)
+
+    if not os.path.exists(file_path):
+        abort(404)
+
     return send_from_directory(user_folder, filename, as_attachment=True)
 
 
 @app.route("/delete/<filename>")
 @login_required
 def delete_file(filename):
+    filename = secure_filename(filename)
     user_folder = os.path.join(app.config["UPLOAD_FOLDER"], current_user.username)
     file_path = os.path.join(user_folder, filename)
 
@@ -178,4 +203,4 @@ def logout():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
