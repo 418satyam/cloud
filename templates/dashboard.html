@@ -1,46 +1,186 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>MyCloud</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: "Segoe UI", sans-serif;
+            display: flex;
+            background-color: #f1f5f9;
+        }
+
+        .sidebar {
+            width: 220px;
+            background: #111827;
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .sidebar h2 {
+            margin-bottom: 30px;
+        }
+
+        .sidebar a {
+            display: block;
+            color: #cbd5e1;
+            text-decoration: none;
+            padding: 10px 0;
+        }
+
+        .sidebar a:hover {
+            color: white;
+        }
+
+        .main {
+            flex: 1;
+            padding: 30px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+        }
+
+        .logout-btn {
+            background: #ef4444;
+            color: white;
+            padding: 8px 14px;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+
+        .progress {
+            height: 12px;
+            background: #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: #2563eb;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background: #f3f4f6;
+        }
+
+        tr:nth-child(even) {
+            background: #f9fafb;
+        }
+
+        .btn {
+            padding: 5px 10px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 12px;
+            color: white;
+        }
+
+        .download {
+            background: #16a34a;
+        }
+
+        .delete {
+            background: #dc2626;
+        }
+
+        input[type="file"] {
+            margin-bottom: 10px;
+        }
+
+    </style>
 </head>
 <body>
 
 <div class="sidebar">
-    <h2>{{ username }}</h2>
-
-    <div class="box red">
-        <h3>{{ used }} MB</h3>
-        <p>Used</p>
-    </div>
-
-    <div class="box green">
-        <h3>{{ remaining }} MB</h3>
-        <p>Remaining</p>
-    </div>
-
-    <a href="/logout" class="logout">Logout</a>
+    <h2>MyCloud</h2>
+    <a href="#">My Files</a>
+    <a href="#">Shared</a>
 </div>
 
 <div class="main">
-    <h1>Personal Cloud</h1>
 
-    <form method="POST" enctype="multipart/form-data" class="upload">
-        <input type="file" name="file" required>
-        <button type="submit">Upload</button>
-    </form>
-
-    <div class="files">
-        {% for file in files %}
-        <div class="file-row">
-            <span>{{ file }}</span>
-            <div>
-                <a href="/download/{{ file }}" class="btn">Download</a>
-                <a href="/delete/{{ file }}" class="btn delete">Delete</a>
-            </div>
-        </div>
-        {% endfor %}
+    <div class="topbar">
+        <h3>Welcome, {{ current_user.email }}</h3>
+        <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
     </div>
+
+    <!-- Storage Card -->
+    {% set total_size = files | sum(attribute='size') %}
+    {% set max_storage = 100 * 1024 * 1024 %}
+    {% set percent = (total_size / max_storage * 100) if max_storage > 0 else 0 %}
+
+    <div class="card">
+        <h4>Storage Usage</h4>
+        <p>{{ (total_size / (1024*1024))|round(2) }} MB / 100 MB</p>
+        <div class="progress">
+            <div class="progress-bar" style="width: {{ percent }}%;"></div>
+        </div>
+    </div>
+
+    <!-- Upload Card -->
+    <div class="card">
+        <h4>Upload File</h4>
+        <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
+            <input type="file" name="file" required><br>
+            <button type="submit">Upload</button>
+        </form>
+    </div>
+
+    <!-- Files Table -->
+    <div class="card">
+        <h4>Your Files ({{ files|length }})</h4>
+
+        {% if files %}
+        <table>
+            <tr>
+                <th>File Name</th>
+                <th>Size (KB)</th>
+                <th>Uploaded</th>
+                <th>Action</th>
+            </tr>
+
+            {% for file in files %}
+            <tr>
+                <td>{{ file.filename }}</td>
+                <td>{{ (file.size / 1024)|round(2) }}</td>
+                <td>{{ file.upload_date.strftime('%d %b %Y %I:%M %p') }}</td>
+                <td>
+                    <a href="{{ file.file_url }}" target="_blank" class="btn download">Download</a>
+                    <a href="{{ url_for('delete', file_id=file.id) }}" class="btn delete">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+
+        </table>
+        {% else %}
+            <p>No files uploaded yet.</p>
+        {% endif %}
+    </div>
+
 </div>
 
 </body>
